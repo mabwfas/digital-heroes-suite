@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useLocalStorage } from "@/lib/hooks";
+
 
 interface BundleTier {
   qty: number;
@@ -47,8 +47,6 @@ function psychPrice(price: number): number {
 }
 
 export default function PricingCalcPage() {
-  const [savedConfigs, setSavedConfigs] = useLocalStorage<{ label: string; cost: number; shipping: number; packaging: number }[]>("ecommerce-pricing-saved", []);
-
   const [productCost, setProductCost] = useState("");
   const [shippingCost, setShippingCost] = useState("");
   const [packagingCost, setPackagingCost] = useState("");

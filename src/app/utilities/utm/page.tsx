@@ -124,7 +124,7 @@ export default function UTMPage() {
   };
 
   const saveLink = () => {
-    if (!fullUrl) return;
+    if (!fullUrl || !source.trim() || !medium.trim()) return;
     const item: SavedUTM = {
       id: generateId(),
       name: linkName || campaign || `UTM ${new Date().toLocaleDateString()}`,
@@ -298,7 +298,7 @@ export default function UTMPage() {
               />
               <Button
                 onClick={saveLink}
-                disabled={!fullUrl}
+                disabled={!fullUrl || !source.trim() || !medium.trim()}
                 variant="outline"
               >
                 Save Link

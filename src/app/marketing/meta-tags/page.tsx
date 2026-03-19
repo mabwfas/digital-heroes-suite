@@ -323,7 +323,7 @@ export default function MetaTagsPage() {
                 )}
                 <div className="p-3 bg-[#f0f2f5] dark:bg-zinc-800 border-t">
                   <p className="text-[10px] uppercase text-muted-foreground tracking-wide">
-                    {form.canonicalUrl ? new URL(form.canonicalUrl.startsWith("http") ? form.canonicalUrl : "https://" + form.canonicalUrl).hostname : "yoursite.com"}
+                    {form.canonicalUrl ? (() => { try { return new URL(form.canonicalUrl.startsWith("http") ? form.canonicalUrl : "https://" + form.canonicalUrl).hostname; } catch { return "yoursite.com"; } })() : "yoursite.com"}
                   </p>
                   <p className="font-semibold text-sm mt-0.5 line-clamp-2">{displayTitle}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{displayDesc}</p>

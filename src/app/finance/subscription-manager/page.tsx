@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { CreditCard, Plus, Trash2, ExternalLink, AlertTriangle, ArrowUpDown, Pause, Play, XCircle, DollarSign, CalendarDays, BarChart3, Bell } from "lucide-react";
+import { CreditCard, Plus, Trash2, ExternalLink, AlertTriangle, ArrowUpDown, Pause, Play, XCircle, DollarSign, CalendarDays, BarChart3, Bell, Edit2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,18 @@ export default function SubscriptionManagerPage() {
 
   const [sortKey, setSortKey] = useState<SortKey>("renewalDate");
   const [sortAsc, setSortAsc] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const startEdit = (sub: Subscription) => {
+    setEditingId(sub.id);
+    setName(sub.name);
+    setCost(String(sub.cost));
+    setCycle(sub.cycle);
+    setCategory(sub.category);
+    setRenewalDate(sub.renewalDate);
+    setUrl(sub.url);
+    setShowForm(true);
+  };
 
   const addSubscription = () => {
     const parsed = parseFloat(cost);
@@ -95,7 +107,12 @@ export default function SubscriptionManagerPage() {
       status: "active",
       createdAt: new Date().toISOString(),
     };
-    setSubscriptions((prev) => [...prev, sub]);
+    if (editingId) {
+      setSubscriptions((prev) => prev.map((s) => (s.id === editingId ? { ...sub, id: editingId, createdAt: s.createdAt, status: s.status } : s)));
+      setEditingId(null);
+    } else {
+      setSubscriptions((prev) => [...prev, sub]);
+    }
     setName("");
     setCost("");
     setUrl("");
@@ -155,15 +172,54 @@ export default function SubscriptionManagerPage() {
       .sort((a, b) => a.renewalDate.localeCompare(b.renewalDate));
   }, [activeSubs]);
 
+  // Compute next renewal date for a subscription on or after a given date
+  const getRecurringRenewals = (sub: Subscription, startDate: Date, endDate: Date): string[] => {
+    const dates: string[] = [];
+    const renewal = new Date(sub.renewalDate);
+    renewal.setHours(0, 0, 0, 0);
+    if (renewal > endDate) return dates;
+
+    // Walk forward from renewalDate by cycle increments
+    const current = new Date(renewal);
+    while (current <= endDate) {
+      if (current >= startDate) {
+        dates.push(current.toISOString().split("T")[0]);
+      }
+      if (sub.cycle === "weekly") {
+        current.setDate(current.getDate() + 7);
+      } else if (sub.cycle === "monthly") {
+        current.setMonth(current.getMonth() + 1);
+      } else {
+        current.setFullYear(current.getFullYear() + 1);
+      }
+    }
+    return dates;
+  };
+
   // Calendar view (next 30 days)
   const calendarDays = useMemo(() => {
     const days: { date: string; label: string; subs: Subscription[] }[] = [];
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 29);
+
+    // Pre-compute all renewal dates for each sub
+    const subRenewals = new Map<string, Set<string>>();
+    activeSubs.forEach((s) => {
+      const renewalDates = getRecurringRenewals(s, today, endDate);
+      renewalDates.forEach((d) => {
+        if (!subRenewals.has(d)) subRenewals.set(d, new Set());
+        subRenewals.get(d)!.add(s.id);
+      });
+    });
+
     for (let i = 0; i < 30; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
       const dateStr = d.toISOString().split("T")[0];
-      const daySubs = activeSubs.filter((s) => s.renewalDate === dateStr);
+      const subIds = subRenewals.get(dateStr);
+      const daySubs = subIds ? activeSubs.filter((s) => subIds.has(s.id)) : [];
       days.push({
         date: dateStr,
         label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -171,6 +227,7 @@ export default function SubscriptionManagerPage() {
       });
     }
     return days;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSubs]);
 
   const toggleSort = (key: SortKey) => {
@@ -273,7 +330,7 @@ export default function SubscriptionManagerPage() {
       {showForm && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">New Subscription</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{editingId ? "Edit Subscription" : "New Subscription"}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -323,7 +380,7 @@ export default function SubscriptionManagerPage() {
                 <Plus className="h-4 w-4 mr-2" />
                 Add
               </Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancel</Button>
             </div>
           </CardContent>
         </Card>
@@ -454,6 +511,9 @@ export default function SubscriptionManagerPage() {
                       <p className="text-xs text-muted-foreground">{formatCurrency(getMonthlyCost(sub))}/mo</p>
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      <Button size="sm" variant="ghost" onClick={() => startEdit(sub)} title="Edit">
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
                       {sub.url && (
                         <Button size="sm" variant="ghost" onClick={() => window.open(sub.url, "_blank")}>
                           <ExternalLink className="h-3.5 w-3.5" />

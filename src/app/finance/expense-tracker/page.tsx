@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Receipt, Plus, Download, Trash2, Filter, Calendar, CreditCard, TrendingUp, DollarSign } from "lucide-react";
+import { Receipt, Plus, Download, Trash2, Filter, Calendar, CreditCard, TrendingUp, DollarSign, Edit2, Check, X } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,22 @@ export default function ExpenseTrackerPage() {
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const startEdit = (expense: Expense) => {
+    setEditingId(expense.id);
+    setAmount(String(expense.amount));
+    setCategory(expense.category);
+    setDate(expense.date);
+    setDescription(expense.description);
+    setPaymentMethod(expense.paymentMethod);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setAmount("");
+    setDescription("");
+  };
 
   const addExpense = () => {
     const parsed = parseFloat(amount);
@@ -66,7 +82,12 @@ export default function ExpenseTrackerPage() {
       paymentMethod,
       createdAt: new Date().toISOString(),
     };
-    setExpenses((prev) => [newExpense, ...prev]);
+    if (editingId) {
+      setExpenses((prev) => prev.map((e) => (e.id === editingId ? { ...newExpense, id: editingId, createdAt: e.createdAt } : e)));
+      setEditingId(null);
+    } else {
+      setExpenses((prev) => [newExpense, ...prev]);
+    }
     setAmount("");
     setDescription("");
   };
@@ -118,14 +139,22 @@ export default function ExpenseTrackerPage() {
       months.push({ label, key, total });
     }
     return months;
-  }, [expenses, now]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenses, thisMonthStr]);
 
   const maxMonthly = Math.max(...monthlyData.map((m) => m.total), 1);
+
+  const csvEscape = (val: string): string => {
+    if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+      return `"${val.replace(/"/g, '""')}"`;
+    }
+    return val;
+  };
 
   const exportCSV = () => {
     const header = "Date,Description,Category,Amount,Payment Method\n";
     const rows = filteredExpenses
-      .map((e) => `${e.date},"${e.description}",${e.category},${e.amount},${e.paymentMethod}`)
+      .map((e) => `${e.date},${csvEscape(e.description)},${csvEscape(e.category)},${e.amount},${csvEscape(e.paymentMethod)}`)
       .join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -224,7 +253,7 @@ export default function ExpenseTrackerPage() {
       {/* Add Expense Form */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Add Expense</CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{editingId ? "Edit Expense" : "Add Expense"}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -280,11 +309,16 @@ export default function ExpenseTrackerPage() {
                 ))}
               </select>
             </div>
-            <div className="flex items-end">
-              <Button onClick={addExpense} className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Expense
+            <div className="flex items-end gap-2">
+              <Button onClick={addExpense} className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white border-0">
+                {editingId ? <Check className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+                {editingId ? "Update Expense" : "Add Expense"}
               </Button>
+              {editingId && (
+                <Button onClick={cancelEdit} variant="outline">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -384,6 +418,9 @@ export default function ExpenseTrackerPage() {
                     </div>
                   </div>
                   <span className="text-sm font-bold shrink-0">{formatCurrency(expense.amount)}</span>
+                  <Button size="sm" variant="ghost" className="shrink-0" onClick={() => startEdit(expense)}>
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
                   <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive shrink-0" onClick={() => deleteExpense(expense.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

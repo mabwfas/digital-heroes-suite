@@ -214,7 +214,7 @@ export default function SEOAnalyzerPage() {
                 <Button
                   className="flex-1 bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 text-white"
                   onClick={handleAnalyze}
-                  disabled={!title && !meta && !h1 && !body}
+                  disabled={!title || !meta || !h1 || !body}
                 >
                   <Search className="h-4 w-4 mr-2" />
                   Analyze SEO

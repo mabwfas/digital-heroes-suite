@@ -157,7 +157,11 @@ export default function ColorPalettePage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [exportCopied, setExportCopied] = useState(false);
 
-  const regenerate = useCallback(() => {
+  const regenerateAll = useCallback(() => {
+    setPalette(generatePalette(harmony));
+  }, [harmony]);
+
+  const refreshUnlocked = useCallback(() => {
     setPalette(prev => {
       const next = generatePalette(harmony, prev);
       return next.map((swatch, i) => prev[i]?.locked ? { ...prev[i] } : swatch);
@@ -297,11 +301,11 @@ export default function ColorPalettePage() {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
-        <Button onClick={regenerate} className="bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white border-0">
+        <Button onClick={regenerateAll} className="bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white border-0">
           <Shuffle className="h-4 w-4 mr-2" />
           Regenerate
         </Button>
-        <Button onClick={regenerate} variant="outline">
+        <Button onClick={refreshUnlocked} variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh Unlocked
         </Button>

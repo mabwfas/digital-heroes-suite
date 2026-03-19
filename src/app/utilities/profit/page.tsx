@@ -61,8 +61,8 @@ export default function ProfitPage() {
   const [reports, setReports] = useLocalStorage<MonthlyReport[]>("profit-reports", []);
   const [isYearly, setIsYearly] = useState(false);
   const [taxRate, setTaxRate] = useState(25);
-  const [income, setIncome] = useState<LineItem[]>(DEFAULT_INCOME);
-  const [expenses, setExpenses] = useState<LineItem[]>(DEFAULT_EXPENSES);
+  const [income, setIncome] = useLocalStorage<LineItem[]>("profit-income-items", DEFAULT_INCOME);
+  const [expenses, setExpenses] = useLocalStorage<LineItem[]>("profit-expense-items", DEFAULT_EXPENSES);
   const [reportName, setReportName] = useState("");
   const [activeTab, setActiveTab] = useState<"calculator" | "reports">("calculator");
 

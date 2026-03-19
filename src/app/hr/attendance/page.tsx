@@ -11,6 +11,7 @@ import {
   AlertCircle,
   XCircle,
   Download,
+  Trash2,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -166,6 +167,10 @@ export default function AttendancePage() {
     } else {
       setCalMonth((m) => m + 1);
     }
+  }
+
+  function deleteEntry(id: string) {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
   function exportCSV() {
@@ -336,7 +341,7 @@ export default function AttendancePage() {
                         ? hoursMinutes(entryDuration(entry))
                         : "In progress"}
                     </div>
-                    <div className="ml-auto">
+                    <div className="ml-auto flex items-center gap-2">
                       {entry.status === "on-time" && (
                         <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-0">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
@@ -355,6 +360,15 @@ export default function AttendancePage() {
                           Absent
                         </Badge>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-500 shrink-0"
+                        onClick={() => deleteEntry(entry.id)}
+                        title="Delete record"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
                 ))}

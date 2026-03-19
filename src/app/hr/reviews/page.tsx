@@ -5,6 +5,7 @@ import {
   Star,
   Plus,
   Trash2,
+  Pencil,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -155,6 +156,7 @@ export default function PerformanceReviewsPage() {
     []
   );
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [expandedEmployee, setExpandedEmployee] = useState<string | null>(null);
   const [form, setForm] = useState({
     employeeName: "",
@@ -183,6 +185,7 @@ export default function PerformanceReviewsPage() {
   );
 
   function openNew() {
+    setEditingReviewId(null);
     setForm({
       employeeName: "",
       reviewPeriod: "",
@@ -195,23 +198,57 @@ export default function PerformanceReviewsPage() {
     setDialogOpen(true);
   }
 
+  function openEdit(review: PerformanceReview) {
+    setEditingReviewId(review.id);
+    setForm({
+      employeeName: review.employeeName,
+      reviewPeriod: review.reviewPeriod,
+      reviewDate: review.reviewDate,
+      ratings: { ...review.ratings },
+      strengths: review.strengths,
+      improvements: review.improvements,
+      goals: review.goals,
+    });
+    setDialogOpen(true);
+  }
+
   function saveReview() {
     if (!form.employeeName.trim()) return;
     const overallScore = calcOverall(form.ratings);
-    setReviews((prev) => [
-      {
-        id: generateId(),
-        employeeName: form.employeeName.trim(),
-        reviewPeriod: form.reviewPeriod,
-        reviewDate: form.reviewDate,
-        ratings: form.ratings,
-        overallScore,
-        strengths: form.strengths,
-        improvements: form.improvements,
-        goals: form.goals,
-      },
-      ...prev,
-    ]);
+    if (editingReviewId) {
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === editingReviewId
+            ? {
+                ...r,
+                employeeName: form.employeeName.trim(),
+                reviewPeriod: form.reviewPeriod,
+                reviewDate: form.reviewDate,
+                ratings: form.ratings,
+                overallScore,
+                strengths: form.strengths,
+                improvements: form.improvements,
+                goals: form.goals,
+              }
+            : r
+        )
+      );
+    } else {
+      setReviews((prev) => [
+        {
+          id: generateId(),
+          employeeName: form.employeeName.trim(),
+          reviewPeriod: form.reviewPeriod,
+          reviewDate: form.reviewDate,
+          ratings: form.ratings,
+          overallScore,
+          strengths: form.strengths,
+          improvements: form.improvements,
+          goals: form.goals,
+        },
+        ...prev,
+      ]);
+    }
     setDialogOpen(false);
   }
 
@@ -396,6 +433,15 @@ export default function PerformanceReviewsPage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => openEdit(review)}
+                                  title="Edit review"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   className="h-7 w-7 text-red-400 hover:text-red-500"
                                   onClick={() => deleteReview(review.id)}
                                 >
@@ -472,7 +518,7 @@ export default function PerformanceReviewsPage() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Performance Review</DialogTitle>
+            <DialogTitle>{editingReviewId ? "Edit Performance Review" : "Create Performance Review"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 mt-2">
             <div className="grid grid-cols-2 gap-4">
@@ -600,7 +646,7 @@ export default function PerformanceReviewsPage() {
               disabled={!form.employeeName.trim()}
               className="bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-700 hover:to-pink-700 text-white"
             >
-              Save Review
+              {editingReviewId ? "Save Changes" : "Save Review"}
             </Button>
           </div>
         </DialogContent>

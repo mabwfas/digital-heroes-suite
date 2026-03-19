@@ -152,7 +152,7 @@ export default function TaxCalculatorPage() {
   };
 
   const calc = useMemo(() => {
-    const rawIncome = parseFloat(incomeInput) || 0;
+    const rawIncome = Math.max(0, parseFloat(incomeInput) || 0);
     const grossIncome = isMonthly ? rawIncome * 12 : rawIncome;
 
     // Self-employment tax
@@ -224,7 +224,10 @@ export default function TaxCalculatorPage() {
                   min="0"
                   step="1000"
                   value={incomeInput}
-                  onChange={(e) => setIncomeInput(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || parseFloat(val) >= 0) setIncomeInput(val);
+                  }}
                   placeholder="100000"
                 />
               </div>
