@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Eraser,
   Upload,
   Eye,
   EyeOff,
-  Sparkles,
   ImageIcon,
   Check,
   Download,
+  SlidersHorizontal,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,31 +29,31 @@ const BG_OPTIONS: { id: BgReplacement; label: string; preview: string }[] = [
   { id: "blur", label: "Blur BG", preview: "bg-gradient-to-br from-sky-200 to-blue-300" },
 ];
 
-const bgPreviewStyle: Record<BgReplacement, string> = {
-  transparent: "bg-[repeating-conic-gradient(#e5e7eb_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]",
-  white: "bg-white",
-  black: "bg-black",
-  "gradient-violet": "bg-gradient-to-br from-violet-500 to-pink-500",
-  "gradient-warm": "bg-gradient-to-br from-orange-400 to-pink-400",
-  blur: "bg-gradient-to-br from-sky-300 to-blue-400 backdrop-blur-xl",
-};
+const checkerBg = "bg-[repeating-conic-gradient(#e5e7eb_0%_25%,transparent_0%_50%)] bg-[length:16px_16px]";
 
 export default function BgRemovePage() {
   const [file, setFile] = useState<File | null>(null);
-  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [showBefore, setShowBefore] = useState(false);
   const [bgChoice, setBgChoice] = useState<BgReplacement>("transparent");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processed, setProcessed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [threshold, setThreshold] = useState(240);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const originalCanvasRef = useRef<HTMLCanvasElement>(null);
+  const processedDataRef = useRef<ImageData | null>(null);
 
   const handleFile = (f: File) => {
     if (!f.type.startsWith("image/")) return;
     setFile(f);
-    setFileUrl(URL.createObjectURL(f));
+    if (originalUrl) URL.revokeObjectURL(originalUrl);
+    setOriginalUrl(URL.createObjectURL(f));
     setProcessed(false);
     setShowBefore(false);
+    processedDataRef.current = null;
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -61,6 +61,7 @@ export default function BgRemovePage() {
     setIsDragging(false);
     const f = e.dataTransfer.files[0];
     if (f) handleFile(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -71,20 +72,122 @@ export default function BgRemovePage() {
   const handleDragLeave = () => setIsDragging(false);
 
   const handleProcess = () => {
-    if (!file) return;
+    if (!originalUrl || !canvasRef.current) return;
     setIsProcessing(true);
-    setTimeout(() => {
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = canvasRef.current!;
+      const origCanvas = originalCanvasRef.current!;
+
+      canvas.width = img.width;
+      canvas.height = img.height;
+      origCanvas.width = img.width;
+      origCanvas.height = img.height;
+
+      // Draw original for before/after
+      const origCtx = origCanvas.getContext("2d")!;
+      origCtx.drawImage(img, 0, 0);
+
+      // Draw to main canvas for processing
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+
+      // Get pixel data
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+
+      // Remove white/light backgrounds by checking if pixel is close to white
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+
+        // Check if pixel is close to white/light
+        if (r > threshold && g > threshold && b > threshold) {
+          // Make transparent
+          data[i + 3] = 0;
+        } else if (r > threshold - 20 && g > threshold - 20 && b > threshold - 20) {
+          // Semi-transparent for edge blending
+          const avg = (r + g + b) / 3;
+          const factor = Math.max(0, (avg - (threshold - 20)) / 20);
+          data[i + 3] = Math.round(255 * (1 - factor));
+        }
+      }
+
+      // Store processed pixel data
+      processedDataRef.current = imageData;
+
+      // Render with chosen background
+      renderWithBackground(canvas, imageData, bgChoice);
+
       setIsProcessing(false);
       setProcessed(true);
-    }, 2200);
+    };
+    img.src = originalUrl;
   };
 
+  const renderWithBackground = (
+    canvas: HTMLCanvasElement,
+    imageData: ImageData,
+    bg: BgReplacement
+  ) => {
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw background
+    if (bg === "white") {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (bg === "black") {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (bg === "gradient-violet") {
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, "#8b5cf6");
+      grad.addColorStop(1, "#ec4899");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (bg === "gradient-warm") {
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, "#fb923c");
+      grad.addColorStop(1, "#f472b6");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (bg === "blur") {
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+      grad.addColorStop(0, "#7dd3fc");
+      grad.addColorStop(1, "#60a5fa");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    // "transparent" = no background drawn
+
+    // Draw processed image on top
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext("2d")!;
+    tempCtx.putImageData(imageData, 0, 0);
+    ctx.drawImage(tempCanvas, 0, 0);
+  };
+
+  // Re-render when background choice changes (if already processed)
+  useEffect(() => {
+    if (processed && processedDataRef.current && canvasRef.current) {
+      renderWithBackground(canvasRef.current, processedDataRef.current, bgChoice);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bgChoice, processed]);
+
   const handleDownload = () => {
-    if (!fileUrl) return;
-    const a = document.createElement("a");
-    a.href = fileUrl;
-    a.download = `bg-removed-${file?.name ?? "image.png"}`;
-    a.click();
+    if (!canvasRef.current || !processed) return;
+    const link = document.createElement("a");
+    const format = bgChoice === "transparent" ? "png" : "png";
+    link.download = `bg-edited-${file?.name?.replace(/\.[^.]+$/, "") ?? "image"}.${format}`;
+    link.href = canvasRef.current.toDataURL("image/png");
+    link.click();
   };
 
   const formatSize = (bytes: number) => {
@@ -96,8 +199,8 @@ export default function BgRemovePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Background Remover"
-        description="Remove image backgrounds instantly with AI. Replace with transparent, solid colors, or gradients."
+        title="Image Background Editor"
+        description="Remove white/light backgrounds from images using Canvas pixel manipulation. Replace with transparent, solid colors, or gradients."
         icon={Eraser}
         badge="AI Studio"
         replaces="Remove.bg ($9/mo)"
@@ -151,6 +254,33 @@ export default function BgRemovePage() {
             </CardContent>
           </Card>
 
+          {/* Threshold Control */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Sensitivity
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">White threshold</Label>
+                <span className="text-xs font-mono text-muted-foreground">{threshold}</span>
+              </div>
+              <input
+                type="range"
+                min={180}
+                max={255}
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value))}
+                className="w-full accent-violet-500"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Lower = removes more shades of grey. Higher = only very white pixels removed.
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Background Replacement */}
           <Card>
             <CardHeader className="pb-3">
@@ -189,8 +319,8 @@ export default function BgRemovePage() {
           >
             {isProcessing ? (
               <>
-                <Sparkles className="h-4 w-4 mr-2 animate-spin" />
-                Processing…
+                <Eraser className="h-4 w-4 mr-2 animate-pulse" />
+                Processing...
               </>
             ) : (
               <>
@@ -203,7 +333,7 @@ export default function BgRemovePage() {
           {processed && (
             <Button onClick={handleDownload} variant="outline" className="w-full h-11">
               <Download className="h-4 w-4 mr-2" />
-              Download Result
+              Download Result (PNG)
             </Button>
           )}
         </div>
@@ -239,7 +369,7 @@ export default function BgRemovePage() {
             <CardContent>
               <div
                 className={`min-h-[400px] rounded-xl flex items-center justify-center overflow-hidden transition-all ${
-                  processed && !showBefore ? bgPreviewStyle[bgChoice] : "bg-muted/30"
+                  processed && !showBefore && bgChoice === "transparent" ? checkerBg : "bg-muted/30"
                 }`}
               >
                 {!file ? (
@@ -252,33 +382,53 @@ export default function BgRemovePage() {
                     <div className="h-16 w-16 rounded-full bg-gradient-to-br from-violet-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-3 animate-pulse">
                       <Eraser className="h-8 w-8 text-violet-500" />
                     </div>
-                    <p className="text-sm font-medium text-violet-600 dark:text-violet-400">Removing background…</p>
-                    <p className="text-xs text-muted-foreground mt-1">Using AI to detect edges</p>
+                    <p className="text-sm font-medium text-violet-600 dark:text-violet-400">Processing pixels...</p>
+                    <p className="text-xs text-muted-foreground mt-1">Analyzing and removing light background</p>
+                  </div>
+                ) : showBefore ? (
+                  <div className="relative w-full h-full flex items-center justify-center p-4">
+                    <canvas
+                      ref={originalCanvasRef}
+                      className="max-w-full max-h-[360px] object-contain rounded-lg"
+                      style={{ width: "auto", height: "auto", maxWidth: "100%", maxHeight: "360px" }}
+                    />
                   </div>
                 ) : (
                   <div className="relative w-full h-full flex items-center justify-center p-4">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={fileUrl!}
-                      alt="Preview"
-                      className="max-w-full max-h-[360px] object-contain rounded-lg"
-                      style={processed && !showBefore ? { mixBlendMode: "multiply" } : {}}
-                    />
-                    {processed && !showBefore && (
-                      <div className="absolute bottom-3 right-3">
-                        <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-0 text-[10px]">
-                          Background Removed
-                        </Badge>
-                      </div>
+                    {processed ? (
+                      <>
+                        <canvas
+                          ref={canvasRef}
+                          className="max-w-full max-h-[360px] object-contain rounded-lg"
+                          style={{ width: "auto", height: "auto", maxWidth: "100%", maxHeight: "360px" }}
+                        />
+                        <div className="absolute bottom-3 right-3">
+                          <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-0 text-[10px]">
+                            Background Removed
+                          </Badge>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={originalUrl!}
+                          alt="Preview"
+                          className="max-w-full max-h-[360px] object-contain rounded-lg"
+                        />
+                        {/* Hidden canvases for processing */}
+                        <canvas ref={canvasRef} className="hidden" />
+                        <canvas ref={originalCanvasRef} className="hidden" />
+                      </>
                     )}
                   </div>
                 )}
               </div>
 
               {processed && (
-                <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                    <strong>Note:</strong> Real AI background removal requires a backend processing service (e.g., Remove.bg API or Replicate). This preview simulates the workflow.
+                <div className="mt-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                  <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                    <strong>How it works:</strong> This tool removes white and near-white pixels using Canvas API pixel manipulation. Adjust the threshold slider for better results. Works best with images that have solid white or light-colored backgrounds.
                   </p>
                 </div>
               )}
@@ -290,8 +440,8 @@ export default function BgRemovePage() {
       <Separator />
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
-          { label: "Supported Formats", value: "PNG, JPG, WebP, GIF" },
-          { label: "Max File Size", value: "20 MB" },
+          { label: "Supported Formats", value: "PNG, JPG, WebP" },
+          { label: "Processing", value: "Client-side Canvas API" },
           { label: "Output Format", value: "PNG with transparency" },
         ].map((info) => (
           <div key={info.label} className="p-3 rounded-xl bg-muted/30 border text-center">

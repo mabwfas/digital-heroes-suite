@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import {
   Palette,
   Copy,
@@ -255,14 +255,13 @@ export default function ColorConverterPage() {
   }, [hex, setHistory]);
 
   // Auto-add to history when color changes and is valid
-  const lastHexRef = useMemo(() => ({ current: "" }), []);
-  if (hex && hex !== lastHexRef.current) {
-    lastHexRef.current = hex;
-    // Schedule for after render
-    if (hydrated && hex) {
-      setTimeout(() => addToHistory(), 0);
+  const lastHexRef = useRef("");
+  useEffect(() => {
+    if (hydrated && hex && hex !== lastHexRef.current) {
+      lastHexRef.current = hex;
+      addToHistory();
     }
-  }
+  }, [hex, hydrated, addToHistory]);
 
   const handleCopy = useCallback(async (text: string, field: string) => {
     try {

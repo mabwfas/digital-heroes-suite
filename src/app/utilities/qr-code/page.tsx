@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import QRCode from "qrcode";
 import {
   QrCode,
   Download,
@@ -29,82 +30,13 @@ const INPUT_TYPES: { id: InputType; label: string; icon: React.ElementType; plac
   { id: "wifi", label: "WiFi", icon: Wifi, placeholder: "Network name (SSID)" },
 ];
 
-// Simple QR code-like SVG generator (visual placeholder with encoded data feel)
 function buildQRData(type: InputType, value: string, wifiPassword?: string): string {
   switch (type) {
     case "email": return `mailto:${value}`;
     case "phone": return `tel:${value}`;
-    case "wifi": return `WIFI:S:${value};T:WPA;P:${wifiPassword || ""};`;
+    case "wifi": return `WIFI:S:${value};T:WPA;P:${wifiPassword || ""};;`;
     default: return value;
   }
-}
-
-// Generate a deterministic grid pattern from a string
-function strToGrid(str: string, size: number): boolean[][] {
-  const grid: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
-  const seed = str.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-
-  for (let r = 0; r < size; r++) {
-    for (let c = 0; c < size; c++) {
-      const val = ((seed * (r + 1) * 31 + c * 17 + r * 13) ^ (seed >> (r % 8))) & 0xff;
-      grid[r][c] = val > 100;
-    }
-  }
-
-  // Force finder patterns (top-left, top-right, bottom-left)
-  const fp = (rr: number, cc: number) => {
-    for (let i = 0; i < 7; i++) {
-      for (let j = 0; j < 7; j++) {
-        const onBorder = i === 0 || i === 6 || j === 0 || j === 6;
-        const onInner = i >= 2 && i <= 4 && j >= 2 && j <= 4;
-        grid[rr + i][cc + j] = onBorder || onInner;
-      }
-    }
-  };
-  fp(0, 0);
-  fp(0, size - 7);
-  fp(size - 7, 0);
-
-  return grid;
-}
-
-function QRCanvas({
-  data,
-  fg,
-  bg,
-  size,
-}: {
-  data: string;
-  fg: string;
-  bg: string;
-  size: number;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const GRID = 25;
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const grid = strToGrid(data || "empty", GRID);
-    const cellSize = size / GRID;
-
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, size, size);
-
-    ctx.fillStyle = fg;
-    for (let r = 0; r < GRID; r++) {
-      for (let c = 0; c < GRID; c++) {
-        if (grid[r][c]) {
-          ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-        }
-      }
-    }
-  }, [data, fg, bg, size]);
-
-  return <canvas ref={canvasRef} width={size} height={size} style={{ imageRendering: "pixelated" }} />;
 }
 
 export default function QRCodePage() {
@@ -118,22 +50,49 @@ export default function QRCodePage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const qrData = buildQRData(inputType, value, wifiPassword);
+  const isValid = value.trim().length > 0;
+
+  // Render the QR code onto the canvas whenever inputs change
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !isValid) {
+      // Clear the canvas when input is empty
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+      return;
+    }
+
+    QRCode.toCanvas(canvas, qrData, {
+      width: qrSize,
+      margin: 2,
+      color: {
+        dark: fgColor,
+        light: bgColor,
+      },
+      errorCorrectionLevel: "M",
+    }).catch((err: unknown) => {
+      console.error("QR code generation failed:", err);
+    });
+  }, [qrData, fgColor, bgColor, qrSize, isValid]);
 
   const handleDownload = useCallback(() => {
-    const canvases = document.querySelectorAll("canvas");
-    const canvas = canvases[0] as HTMLCanvasElement;
-    if (!canvas) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !isValid) return;
     const url = canvas.toDataURL("image/png");
     const a = document.createElement("a");
     a.href = url;
     a.download = "qr-code.png";
     a.click();
-  }, []);
+  }, [isValid]);
 
   const copyDataURL = useCallback(async () => {
-    const canvases = document.querySelectorAll("canvas");
-    const canvas = canvases[0] as HTMLCanvasElement;
-    if (!canvas) return;
+    const canvas = canvasRef.current;
+    if (!canvas || !isValid) return;
     canvas.toBlob(async (blob) => {
       if (!blob) return;
       try {
@@ -145,7 +104,7 @@ export default function QRCodePage() {
         setTimeout(() => setCopied(false), 1500);
       }
     });
-  }, []);
+  }, [isValid]);
 
   return (
     <div className="space-y-6">
@@ -218,7 +177,10 @@ export default function QRCodePage() {
                   />
                 </div>
               )}
-              {qrData && (
+              {!isValid && (
+                <p className="text-xs text-amber-500">Enter some content to generate a QR code.</p>
+              )}
+              {isValid && qrData && (
                 <div className="p-2.5 rounded-lg bg-muted/40 border">
                   <p className="text-[10px] text-muted-foreground mb-0.5">Encoded data</p>
                   <p className="text-xs font-mono break-all">{qrData}</p>
@@ -335,23 +297,22 @@ export default function QRCodePage() {
                 className="rounded-xl p-4 shadow-md"
                 style={{ backgroundColor: bgColor }}
               >
-                <QRCanvas
-                  data={qrData}
-                  fg={fgColor}
-                  bg={bgColor}
-                  size={Math.min(qrSize, 256)}
+                <canvas
+                  ref={canvasRef}
+                  style={{ imageRendering: "pixelated", maxWidth: "100%", height: "auto" }}
                 />
               </div>
 
               <div className="w-full space-y-2">
                 <Button
                   onClick={handleDownload}
+                  disabled={!isValid}
                   className="w-full bg-gradient-to-r from-violet-500 to-pink-500 hover:from-violet-600 hover:to-pink-600 text-white border-0"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download PNG
                 </Button>
-                <Button onClick={copyDataURL} variant="outline" className="w-full">
+                <Button onClick={copyDataURL} variant="outline" className="w-full" disabled={!isValid}>
                   {copied ? (
                     <><Check className="h-4 w-4 mr-2 text-emerald-500" />Copied!</>
                   ) : (
@@ -362,7 +323,7 @@ export default function QRCodePage() {
 
               <div className="w-full p-3 rounded-lg bg-muted/30 border text-center">
                 <p className="text-[10px] text-muted-foreground">
-                  QR codes are generated in-browser using a canvas-based algorithm. Scan with any standard QR reader.
+                  QR codes are generated in-browser using the qrcode library. Scan with any standard QR reader.
                 </p>
               </div>
             </CardContent>

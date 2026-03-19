@@ -217,23 +217,43 @@ function policyToHtml(text: string, biz: string): string {
   const lines = text.split("\n");
   let html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>Privacy Policy - ${biz}</title>\n<style>\nbody { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; line-height: 1.7; color: #333; }\nh1 { font-size: 1.75rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }\nh2 { font-size: 1.25rem; margin-top: 2rem; color: #1f2937; }\nul { padding-left: 1.5rem; }\nli { margin-bottom: 0.35rem; }\n</style>\n</head>\n<body>\n`;
 
+  let inList = false;
+
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) {
+      if (inList) {
+        html += `</ul>\n`;
+        inList = false;
+      }
       html += "\n";
       continue;
     }
-    if (trimmed === "PRIVACY POLICY") {
-      html += `<h1>Privacy Policy</h1>\n`;
-    } else if (/^\d+\.\s/.test(trimmed)) {
-      html += `<h2>${trimmed}</h2>\n`;
-    } else if (trimmed.startsWith("- ")) {
-      html += `<ul><li>${trimmed.slice(2)}</li></ul>\n`;
-    } else if (trimmed.startsWith("Last Updated:")) {
-      html += `<p><em>${trimmed}</em></p>\n`;
+    if (trimmed.startsWith("- ")) {
+      if (!inList) {
+        html += `<ul>\n`;
+        inList = true;
+      }
+      html += `<li>${trimmed.slice(2)}</li>\n`;
     } else {
-      html += `<p>${trimmed}</p>\n`;
+      if (inList) {
+        html += `</ul>\n`;
+        inList = false;
+      }
+      if (trimmed === "PRIVACY POLICY") {
+        html += `<h1>Privacy Policy</h1>\n`;
+      } else if (/^\d+\.\s/.test(trimmed)) {
+        html += `<h2>${trimmed}</h2>\n`;
+      } else if (trimmed.startsWith("Last Updated:")) {
+        html += `<p><em>${trimmed}</em></p>\n`;
+      } else {
+        html += `<p>${trimmed}</p>\n`;
+      }
     }
+  }
+
+  if (inList) {
+    html += `</ul>\n`;
   }
 
   html += `</body>\n</html>`;

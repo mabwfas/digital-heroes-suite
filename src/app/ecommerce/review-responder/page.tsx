@@ -32,6 +32,29 @@ interface ResponseHistory {
 type Tone = "Professional" | "Friendly" | "Empathetic";
 type Length = "Short" | "Medium" | "Long";
 
+function extractKeywords(text: string): string[] {
+  if (!text.trim()) return [];
+  const stopWords = new Set(["i", "me", "my", "the", "a", "an", "is", "was", "were", "be", "been", "it", "its", "this", "that", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "from", "as", "into", "not", "no", "so", "if", "do", "did", "has", "had", "have", "very", "just", "about", "am", "are", "would", "could", "should", "will", "can", "than", "then", "also", "too", "they", "them", "their", "we", "our", "you", "your", "he", "she", "his", "her"]);
+  const words = text.toLowerCase().replace(/[^a-z0-9\s'-]/g, "").split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+  // Return unique keywords, max 5
+  return [...new Set(words)].slice(0, 5);
+}
+
+function detectSentiment(text: string): "positive" | "negative" | "mixed" | "neutral" {
+  if (!text.trim()) return "neutral";
+  const lower = text.toLowerCase();
+  const positiveWords = ["love", "great", "amazing", "excellent", "perfect", "awesome", "fantastic", "wonderful", "best", "happy", "pleased", "impressed", "recommend", "quality", "fast", "beautiful", "easy", "works"];
+  const negativeWords = ["bad", "terrible", "awful", "worst", "broken", "defective", "cheap", "poor", "disappointed", "waste", "horrible", "useless", "refund", "return", "damaged", "slow", "difficult", "wrong", "missing", "never", "hate", "junk", "scam", "fake"];
+
+  const posCount = positiveWords.filter(w => lower.includes(w)).length;
+  const negCount = negativeWords.filter(w => lower.includes(w)).length;
+
+  if (posCount > 0 && negCount > 0) return "mixed";
+  if (posCount > negCount) return "positive";
+  if (negCount > posCount) return "negative";
+  return "neutral";
+}
+
 function generateResponse(
   reviewText: string,
   rating: number,
@@ -54,47 +77,77 @@ function generateResponse(
     ? "Thanks again!\nThe Team"
     : "With warm regards,\nYour Support Team";
 
+  // Extract keywords and sentiment from the actual review text
+  const keywords = extractKeywords(reviewText);
+  const sentiment = detectSentiment(reviewText);
+
+  // Build a context-aware sentence referencing the review
+  let reviewRef = "";
+  if (keywords.length > 0) {
+    const keywordStr = keywords.slice(0, 3).join(", ");
+    if (rating >= 4) {
+      reviewRef = `We're especially glad to hear your positive feedback regarding ${keywordStr}.`;
+    } else if (rating === 3) {
+      reviewRef = `We've noted your comments about ${keywordStr} and will look into these areas.`;
+    } else {
+      reviewRef = `We've carefully reviewed your concerns regarding ${keywordStr} and take them very seriously.`;
+    }
+  }
+
+  // Add sentiment-aware phrasing
+  let sentimentNote = "";
+  if (sentiment === "mixed" && length !== "Short") {
+    sentimentNote = "We appreciate that you highlighted both the positives and the areas needing improvement - this balanced perspective helps us prioritize what to work on.";
+  } else if (sentiment === "positive" && rating <= 3) {
+    sentimentNote = "We're glad there were aspects you appreciated, and we want to build on that foundation.";
+  } else if (sentiment === "negative" && rating >= 4) {
+    sentimentNote = "We want to make sure any remaining concerns are fully addressed.";
+  }
+
+  const extra = [reviewRef, sentimentNote].filter(Boolean).join(" ");
+  const extraBlock = extra ? `\n\n${extra}` : "";
+
   if (rating === 5) {
     const bodies: Record<Length, string> = {
-      Short: `Thank you so much for the wonderful 5-star review of ${product}! We're thrilled you're enjoying it. If you have a moment, we'd love if you shared your experience with friends and family.`,
-      Medium: `Thank you so much for your amazing 5-star review of ${product}! Your kind words truly made our day. We're so glad that ${product} has met your expectations and that you're enjoying the experience.\n\nIf you love it as much as your review suggests, we'd be incredibly grateful if you shared your experience with friends, family, or on social media. Word of mouth from happy customers like you means the world to us!`,
-      Long: `Thank you so much for taking the time to leave such a wonderful 5-star review of ${product}! Your kind words truly brighten our day and motivate our entire team.\n\nWe're absolutely thrilled to hear that ${product} has exceeded your expectations. It's feedback like yours that reminds us why we do what we do. Every detail in ${product} has been carefully crafted with customers like you in mind, and knowing it resonated with you means everything.\n\nIf you're loving your experience, we'd be incredibly grateful if you could share it with friends, family, or on your social media. Honest reviews and word-of-mouth recommendations from valued customers like you are the most powerful way to help others discover what makes ${product} special.\n\nWe'd also love for you to check out our other products - we think you'd enjoy them just as much!`,
+      Short: `Thank you so much for the wonderful 5-star review of ${product}! We're thrilled you're enjoying it.${extra ? " " + reviewRef : ""} If you have a moment, we'd love if you shared your experience with friends and family.`,
+      Medium: `Thank you so much for your amazing 5-star review of ${product}! Your kind words truly made our day. We're so glad that ${product} has met your expectations and that you're enjoying the experience.${extraBlock}\n\nIf you love it as much as your review suggests, we'd be incredibly grateful if you shared your experience with friends, family, or on social media. Word of mouth from happy customers like you means the world to us!`,
+      Long: `Thank you so much for taking the time to leave such a wonderful 5-star review of ${product}! Your kind words truly brighten our day and motivate our entire team.\n\nWe're absolutely thrilled to hear that ${product} has exceeded your expectations. It's feedback like yours that reminds us why we do what we do. Every detail in ${product} has been carefully crafted with customers like you in mind, and knowing it resonated with you means everything.${extraBlock}\n\nIf you're loving your experience, we'd be incredibly grateful if you could share it with friends, family, or on your social media. Honest reviews and word-of-mouth recommendations from valued customers like you are the most powerful way to help others discover what makes ${product} special.\n\nWe'd also love for you to check out our other products - we think you'd enjoy them just as much!`,
     };
     return `${greeting}\n\n${bodies[length]}\n\n${signoff}`;
   }
 
   if (rating === 4) {
     const bodies: Record<Length, string> = {
-      Short: `Thank you for the great review of ${product}! We're happy to hear you're enjoying it. We'd love to know what would make it a 5-star experience for you - your feedback helps us improve!`,
-      Medium: `Thank you for your generous 4-star review of ${product}! We're really pleased that you've had a positive experience.\n\nWe're always striving for perfection, though, and we'd love to hear what would take your experience from great to exceptional. Is there anything specific we could improve to earn that 5th star? Your insights are invaluable to us.`,
-      Long: `Thank you so much for your thoughtful 4-star review of ${product}! We truly appreciate you taking the time to share your experience, and we're delighted that ${product} has largely met your expectations.\n\nAt the same time, we notice there's room for us to grow. We're genuinely curious - what would it take to make your experience a perfect 5 stars? Whether it's a feature enhancement, a quality improvement, or anything else, your honest feedback is incredibly valuable to our team.\n\nWe take every piece of feedback seriously and use it to continuously improve. Please don't hesitate to reach out to us directly at any time - we're always here to help and listen.\n\nThank you for being a valued customer and for helping us get better every day!`,
+      Short: `Thank you for the great review of ${product}! We're happy to hear you're enjoying it.${extra ? " " + reviewRef : ""} We'd love to know what would make it a 5-star experience for you - your feedback helps us improve!`,
+      Medium: `Thank you for your generous 4-star review of ${product}! We're really pleased that you've had a positive experience.${extraBlock}\n\nWe're always striving for perfection, though, and we'd love to hear what would take your experience from great to exceptional. Is there anything specific we could improve to earn that 5th star? Your insights are invaluable to us.`,
+      Long: `Thank you so much for your thoughtful 4-star review of ${product}! We truly appreciate you taking the time to share your experience, and we're delighted that ${product} has largely met your expectations.${extraBlock}\n\nAt the same time, we notice there's room for us to grow. We're genuinely curious - what would it take to make your experience a perfect 5 stars? Whether it's a feature enhancement, a quality improvement, or anything else, your honest feedback is incredibly valuable to our team.\n\nWe take every piece of feedback seriously and use it to continuously improve. Please don't hesitate to reach out to us directly at any time - we're always here to help and listen.\n\nThank you for being a valued customer and for helping us get better every day!`,
     };
     return `${greeting}\n\n${bodies[length]}\n\n${signoff}`;
   }
 
   if (rating === 3) {
     const bodies: Record<Length, string> = {
-      Short: `Thank you for your honest feedback about ${product}. We appreciate your perspective and would love to help improve your experience. Please reach out to our support team so we can make things right.`,
-      Medium: `Thank you for your honest review of ${product}. We appreciate you sharing your experience, and we're sorry it wasn't everything you hoped for.\n\nYour feedback is truly important to us, and we want to make things better. We'd love the chance to understand your concerns in more detail and find a solution. Would you mind reaching out to our support team? We're committed to turning your experience around.`,
-      Long: `Thank you for taking the time to share your honest feedback about ${product}. We genuinely appreciate your perspective, even when it highlights areas where we can do better.\n\nWe're sorry to hear that your experience wasn't everything you expected. Your satisfaction is our top priority, and we take your concerns seriously. We understand that a 3-star experience means there's significant room for improvement, and we want to address that.\n\nWe'd love the opportunity to learn more about what fell short and how we can make it right. Our support team is standing by and ready to help. Whether it's troubleshooting, a replacement, or simply listening to your detailed feedback, we're here for you.\n\nPlease don't hesitate to contact us directly. We're committed to ensuring every customer has an outstanding experience with ${product}.`,
+      Short: `Thank you for your honest feedback about ${product}. We appreciate your perspective${extra ? " - " + reviewRef.toLowerCase() : ""}. Please reach out to our support team so we can make things right.`,
+      Medium: `Thank you for your honest review of ${product}. We appreciate you sharing your experience, and we're sorry it wasn't everything you hoped for.${extraBlock}\n\nYour feedback is truly important to us, and we want to make things better. We'd love the chance to understand your concerns in more detail and find a solution. Would you mind reaching out to our support team? We're committed to turning your experience around.`,
+      Long: `Thank you for taking the time to share your honest feedback about ${product}. We genuinely appreciate your perspective, even when it highlights areas where we can do better.${extraBlock}\n\nWe're sorry to hear that your experience wasn't everything you expected. Your satisfaction is our top priority, and we take your concerns seriously. We understand that a 3-star experience means there's significant room for improvement, and we want to address that.\n\nWe'd love the opportunity to learn more about what fell short and how we can make it right. Our support team is standing by and ready to help. Whether it's troubleshooting, a replacement, or simply listening to your detailed feedback, we're here for you.\n\nPlease don't hesitate to contact us directly. We're committed to ensuring every customer has an outstanding experience with ${product}.`,
     };
     return `${greeting}\n\n${bodies[length]}\n\n${signoff}`;
   }
 
   if (rating === 2) {
     const bodies: Record<Length, string> = {
-      Short: `We sincerely apologize for your disappointing experience with ${product}. This isn't the standard we set for ourselves. Please contact our support team and we'll work to resolve this immediately.`,
-      Medium: `We're truly sorry to hear about your disappointing experience with ${product}. Please know that this does not reflect the quality standards we hold ourselves to, and we take your feedback very seriously.\n\nWe want to make this right. Our support team is ready to help you with a resolution - whether that's a replacement, troubleshooting assistance, or a refund. Please reach out to us at your earliest convenience so we can address your concerns promptly.`,
-      Long: `We're truly sorry to hear about your experience with ${product}. Reading your review, we can understand your frustration, and we sincerely apologize for not meeting your expectations.\n\nThis is not the experience we want any of our customers to have. We hold ourselves to high standards, and it's clear we fell short in your case. Your feedback is a wake-up call that we take very seriously.\n\nWe want to make this right for you. Our dedicated support team is standing by and ready to provide a personalized resolution. This could include a full replacement, detailed troubleshooting support, or a complete refund - whatever works best for you.\n\nPlease reach out to our support team at your earliest convenience. We've flagged your case as a priority, and we won't rest until you're satisfied with the outcome. You deserve better, and we're committed to delivering on that promise.`,
+      Short: `We sincerely apologize for your disappointing experience with ${product}.${extra ? " " + reviewRef : ""} This isn't the standard we set for ourselves. Please contact our support team and we'll work to resolve this immediately.`,
+      Medium: `We're truly sorry to hear about your disappointing experience with ${product}. Please know that this does not reflect the quality standards we hold ourselves to, and we take your feedback very seriously.${extraBlock}\n\nWe want to make this right. Our support team is ready to help you with a resolution - whether that's a replacement, troubleshooting assistance, or a refund. Please reach out to us at your earliest convenience so we can address your concerns promptly.`,
+      Long: `We're truly sorry to hear about your experience with ${product}. Reading your review, we can understand your frustration, and we sincerely apologize for not meeting your expectations.${extraBlock}\n\nThis is not the experience we want any of our customers to have. We hold ourselves to high standards, and it's clear we fell short in your case. Your feedback is a wake-up call that we take very seriously.\n\nWe want to make this right for you. Our dedicated support team is standing by and ready to provide a personalized resolution. This could include a full replacement, detailed troubleshooting support, or a complete refund - whatever works best for you.\n\nPlease reach out to our support team at your earliest convenience. We've flagged your case as a priority, and we won't rest until you're satisfied with the outcome. You deserve better, and we're committed to delivering on that promise.`,
     };
     return `${greeting}\n\n${bodies[length]}\n\n${signoff}`;
   }
 
   // rating === 1
   const bodies: Record<Length, string> = {
-    Short: `We are deeply sorry for your terrible experience with ${product}. We take this extremely seriously. Please contact our support team immediately - we will escalate this and make it right.`,
-    Medium: `We are deeply sorry for your experience with ${product}. Please know that your review has been escalated to our senior support team for immediate attention.\n\nWe understand that words alone aren't enough - we need to take action. Please reach out to our support team right away, and we will prioritize your case. We're committed to providing a swift resolution and ensuring this doesn't happen to anyone else.`,
-    Long: `We are deeply sorry for the experience you've had with ${product}. Reading your review, we can feel your frustration, and we want you to know that this has been escalated immediately to our senior management team.\n\nThis is completely unacceptable, and we take full responsibility. No customer should ever have this kind of experience, and we sincerely apologize for letting you down.\n\nWe want to make this right - not just for you, but to prevent this from happening to any future customer. Your case has been flagged as highest priority, and our senior support team is standing by to provide a comprehensive resolution.\n\nPlease contact our support team at your earliest convenience. We will be reaching out to you directly as well. We are committed to not only resolving your immediate concerns but also implementing changes to ensure this situation never occurs again.\n\nYou have our word that we will do everything in our power to restore your faith in our brand and our products.`,
+    Short: `We are deeply sorry for your terrible experience with ${product}.${extra ? " " + reviewRef : ""} We take this extremely seriously. Please contact our support team immediately - we will escalate this and make it right.`,
+    Medium: `We are deeply sorry for your experience with ${product}. Please know that your review has been escalated to our senior support team for immediate attention.${extraBlock}\n\nWe understand that words alone aren't enough - we need to take action. Please reach out to our support team right away, and we will prioritize your case. We're committed to providing a swift resolution and ensuring this doesn't happen to anyone else.`,
+    Long: `We are deeply sorry for the experience you've had with ${product}. Reading your review, we can feel your frustration, and we want you to know that this has been escalated immediately to our senior management team.${extraBlock}\n\nThis is completely unacceptable, and we take full responsibility. No customer should ever have this kind of experience, and we sincerely apologize for letting you down.\n\nWe want to make this right - not just for you, but to prevent this from happening to any future customer. Your case has been flagged as highest priority, and our senior support team is standing by to provide a comprehensive resolution.\n\nPlease contact our support team at your earliest convenience. We will be reaching out to you directly as well. We are committed to not only resolving your immediate concerns but also implementing changes to ensure this situation never occurs again.\n\nYou have our word that we will do everything in our power to restore your faith in our brand and our products.`,
   };
   return `${greeting}\n\n${bodies[length]}\n\n${signoff}`;
 }
