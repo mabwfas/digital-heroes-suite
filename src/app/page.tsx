@@ -96,9 +96,9 @@ export default function DashboardPage() {
     },
     {
       label: "Tools Available",
-      value: "54",
+      value: "217",
       icon: Zap,
-      change: "10 categories",
+      change: "37 categories",
       color: "text-violet-600 dark:text-violet-400",
       bg: "bg-violet-500/10",
     },
@@ -128,7 +128,7 @@ export default function DashboardPage() {
               <Sparkles className="h-4 w-4" />
             </div>
             <Badge className="bg-white/20 text-white border-0 hover:bg-white/30 backdrop-blur-sm">
-              54+ Premium Tools
+              217+ Premium Tools
             </Badge>
           </div>
           <h1 className="text-3xl md:text-4xl font-bold mb-3 tracking-tight">
